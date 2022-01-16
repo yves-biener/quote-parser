@@ -1,0 +1,38 @@
+#+title: Quote Parser
+#+author: Yves Biener
+#+email: yves.biener@gmx.de
+#+options: toc:nil
+#+toc: headlines 5
+
+* What is this project about?
+
+Quote parser is an additional tool to the quote reminder to automatically add
+the necessary entries for each data store by providing some input. The goal is
+to have the quotes to be added with the least possible efford.
+
+* Where do the quotes come from?
+
+Depending on the source of the quotes there are different ways to add quotes to
+the database. The goal should be to combine the appending of quotes into a
+single universal process regardless of the source of the quote.
+
+** Kindle
+
+Kindle notes can be uploaded by using the export notes functionality of the
+kindle-device. There seems to be no way to do this on the online version. Also
+following questions remain unclear:
++ What about books that I didn't bought via amazon (e.g. downloaded via
+  Humble-bundle, etc.)?
++ Will all quotes be exported even if they were not all done on one device (e.g.
+  tablet, pc and kindle)?
++ Does this also apply to non-amazon books (synching across multiple devices)?
+
+** Printed Books
+
+Quotes from printed books can also be stored. They need to be added individually
+or batched in a table form (e.g. as cv file, etc.) which then can be uploaded.
+
+** Non-Kindle format Books
+
+I also have Books that are not in the kindle-format (.mobi). For these books use
+a similar approach as for [[Printed Books]].
