@@ -1,9 +1,14 @@
 package parse
 
 import (
+	"database/sql"
 	"log"
 	"time"
 )
+
+type Result struct {
+	Id int
+}
 
 type Author struct {
 	Id   int
@@ -26,7 +31,7 @@ type Book struct {
 	TopicId     int
 	LanguageId  int
 	Title       string
-	ISBN        string
+	ISBN        sql.NullString
 	ReleaseDate time.Time
 }
 
@@ -38,45 +43,24 @@ type Quote struct {
 }
 
 // this interface should be implemented by the component that makes the REST api
-// calls
+// calls. The Commit should set the Id value of the element!
 type Entity interface {
 	Commit() error
 }
 
 type ParseResult struct {
-	authors   []Entity
-	topics    []Entity
-	languages []Entity
-	books     []Entity
-	quotes    []Entity
+	entities []Entity
 }
 
 // Commit all ParseResults using the interface method 'Commit'
 func (result ParseResult) Commit() {
-	for _, author := range result.authors {
-		if err := author.Commit(); err != nil {
-			log.Fatal(err)
-		}
-	}
-	for _, topic := range result.topics {
-		if err := topic.Commit(); err != nil {
-			log.Fatal(err)
-		}
-	}
-	for _, language := range result.languages {
-		if err := language.Commit(); err != nil {
-			log.Fatal(err)
-		}
-	}
-	for _, book := range result.books {
-		if err := book.Commit(); err != nil {
-			log.Fatal(err)
-		}
-	}
-	for _, quote := range result.quotes {
-		if err := quote.Commit(); err != nil {
-			log.Fatal(err)
-		}
+	for _, entity := range result.entities {
+		// if a dependend entity fails it will cause a deadlock
+		go func(e Entity) {
+			if err := e.Commit(); err != nil {
+				log.Fatal(err)
+			}
+		}(entity)
 	}
 }
 
