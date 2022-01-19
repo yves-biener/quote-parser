@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	parse "parse/parser"
 	"strconv"
 	"strings"
@@ -18,9 +20,37 @@ const (
 	authorUrl   = rootUrl + "/authors"
 	topicUrl    = rootUrl + "/topics"
 	languageUrl = rootUrl + "/languages"
-	bookUrl     = authorUrl + "/%d/books"
+	bookUrl     = rootUrl + "/books"
 	quotesUrl   = rootUrl + "/quotes"
 )
+
+// TODO: run these in parallel and wait for result to finish
+func postQuotes(quotes []parse.Quote) {
+	for _, quote := range quotes {
+		data := url.Values{}
+		data.Add("BookId", fmt.Sprintf("%d", quote.BookId))
+		data.Add("Page", fmt.Sprintf("%d", quote.Page))
+		data.Add("Quote", quote.Quote)
+		response, err := http.Post(
+			quotesUrl,
+			"application/x-www-form-urlencoded",
+			strings.NewReader(data.Encode()))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer response.Body.Close()
+		resultJson, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		result := parse.Result{}
+		err = json.Unmarshal(resultJson, &result)
+		if err != nil {
+			log.Fatal(err)
+		}
+		quote.Id = result.Id
+	}
+}
 
 func userGetAuthor() (author parse.Author) {
 	response, err := http.Get(authorUrl)
@@ -211,8 +241,8 @@ func userGetLanguage() (language parse.Language) {
 	return
 }
 
-func userGetBook(authorId int) (book parse.Book) {
-	response, err := http.Get(fmt.Sprintf(bookUrl, authorId))
+func userGetBook() (book parse.Book) {
+	response, err := http.Get(bookUrl)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -259,14 +289,18 @@ func userGetBook(authorId int) (book parse.Book) {
 			}
 		}
 		// create book
-		// TODO: I need the related Author, Topic and Language now
+		author := userGetAuthor()
+		topic := userGetTopic()
+		language := userGetLanguage()
 		data := url.Values{}
 		data.Add("Title", book.Title)
 		data.Add("ISBN", book.ISBN.String)
+		data.Add("AuthorId", fmt.Sprintf("%d", author.Id))
+		data.Add("TopicId", fmt.Sprintf("%d", topic.Id))
+		data.Add("LanguageId", fmt.Sprintf("%d", language.Id))
 		if len(userInput) > 0 {
 			data.Add("ReleaseDate", userInput)
 		}
-		// TODO: fix url for post
 		response, err = http.Post(
 			bookUrl,
 			"application/x-www-form-urlencoded",
@@ -297,11 +331,57 @@ func userGetBook(authorId int) (book parse.Book) {
 	return
 }
 
+// TODO: move to other file for specific parsing
+func parseKindleCSV(file *os.File, book parse.Book) (quotes []parse.Quote) {
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		text := scanner.Text()
+		text = text[1 : len(text)-2]
+		columns := strings.Split(text, "\",\"")
+		if len(columns) != 4 {
+			continue
+		}
+		typ := columns[0]
+		if !strings.HasPrefix(typ, "Markierung") {
+			continue
+		}
+		pageSplit := strings.Split(columns[1], " ")
+		page, err := strconv.Atoi(pageSplit[1])
+		if err != nil {
+			log.Fatal(err)
+		}
+		quoteText := columns[3]
+		quote := parse.Quote{
+			BookId: book.Id,
+			Page:   page,
+			Quote:  quoteText,
+		}
+		quotes = append(quotes, quote)
+	}
+	return
+}
+
 func main() {
-	// TODO: change order to make the user make as little inputs as required
-	author := userGetAuthor()
-	topic := userGetTopic()
-	language := userGetLanguage()
-	book := userGetBook(author.Id)
-	fmt.Println(author, topic, language, book)
+	args := os.Args[1:]
+	if len(args) != 2 {
+		log.Fatal("Usage: quote-parser -<type> <pathToCsvWithQuotes>")
+	}
+	book := userGetBook()
+	var parsingFunction func(*os.File, parse.Book) []parse.Quote
+	switch args[0] {
+	case "-kindle":
+		parsingFunction = parseKindleCSV
+	default:
+		log.Fatalf("Unknown type: %s", args[0])
+	}
+	file, err := os.Open(args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	quotes := parsingFunction(file, book)
+	postQuotes(quotes)
+	for _, quote := range quotes {
+		fmt.Println(quote)
+	}
 }
