@@ -12,6 +12,7 @@ import (
 	parse "parse/parser"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,32 +25,29 @@ const (
 	quotesUrl   = rootUrl + "/quotes"
 )
 
-// TODO: run these in parallel and wait for result to finish
-func postQuotes(quotes []parse.Quote) {
-	for _, quote := range quotes {
-		data := url.Values{}
-		data.Add("BookId", fmt.Sprintf("%d", quote.BookId))
-		data.Add("Page", fmt.Sprintf("%d", quote.Page))
-		data.Add("Quote", quote.Quote)
-		response, err := http.Post(
-			quotesUrl,
-			"application/x-www-form-urlencoded",
-			strings.NewReader(data.Encode()))
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer response.Body.Close()
-		resultJson, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-		result := parse.Result{}
-		err = json.Unmarshal(resultJson, &result)
-		if err != nil {
-			log.Fatal(err)
-		}
-		quote.Id = result.Id
+func postQuote(quote parse.Quote) {
+	data := url.Values{}
+	data.Add("BookId", fmt.Sprintf("%d", quote.BookId))
+	data.Add("Page", fmt.Sprintf("%d", quote.Page))
+	data.Add("Quote", quote.Quote)
+	response, err := http.Post(
+		quotesUrl,
+		"application/x-www-form-urlencoded",
+		strings.NewReader(data.Encode()))
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer response.Body.Close()
+	resultJson, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result := parse.Result{}
+	err = json.Unmarshal(resultJson, &result)
+	if err != nil {
+		log.Fatal(err)
+	}
+	quote.Id = result.Id
 }
 
 func userGetAuthor() (author parse.Author) {
@@ -380,8 +378,16 @@ func main() {
 	}
 	defer file.Close()
 	quotes := parsingFunction(file, book)
-	postQuotes(quotes)
+	var wg sync.WaitGroup
+	for _, quote := range quotes {
+		go func(q parse.Quote, w *sync.WaitGroup) {
+			w.Add(1)
+			defer w.Done()
+			postQuote(q)
+		}(quote, &wg)
+	}
 	for _, quote := range quotes {
 		fmt.Println(quote)
 	}
+	wg.Wait()
 }
