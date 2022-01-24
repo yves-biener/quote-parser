@@ -3,6 +3,7 @@ package parse
 import (
 	"database/sql"
 	"log"
+	"os"
 	"time"
 )
 
@@ -52,6 +53,8 @@ type ParseResult struct {
 	entities []Entity
 }
 
+type Parser func(*os.File, Book) []Quote
+
 // Commit all ParseResults using the interface method 'Commit'
 func (result ParseResult) Commit() {
 	for _, entity := range result.entities {
@@ -62,8 +65,4 @@ func (result ParseResult) Commit() {
 			}
 		}(entity)
 	}
-}
-
-type Parser interface {
-	Parse() ParseResult
 }

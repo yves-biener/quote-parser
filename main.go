@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -329,46 +328,21 @@ func userGetBook() (book parse.Book) {
 	return
 }
 
-// TODO: move to other file for specific parsing
-func parseKindleCSV(file *os.File, book parse.Book) (quotes []parse.Quote) {
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		text := scanner.Text()
-		text = text[1 : len(text)-2]
-		columns := strings.Split(text, "\",\"")
-		if len(columns) != 4 {
-			continue
-		}
-		typ := columns[0]
-		if !strings.HasPrefix(typ, "Markierung") {
-			continue
-		}
-		pageSplit := strings.Split(columns[1], " ")
-		page, err := strconv.Atoi(pageSplit[1])
-		if err != nil {
-			log.Fatal(err)
-		}
-		quoteText := columns[3]
-		quote := parse.Quote{
-			BookId: book.Id,
-			Page:   page,
-			Quote:  quoteText,
-		}
-		quotes = append(quotes, quote)
-	}
-	return
-}
-
 func main() {
 	args := os.Args[1:]
 	if len(args) != 2 {
 		log.Fatal("Usage: quote-parser -<type> <pathToCsvWithQuotes>")
+		log.Fatal("Available types:\n")
+		log.Fatal(parse.KindleType)
+		log.Fatal(parse.PhysicalType)
 	}
 	book := userGetBook()
-	var parsingFunction func(*os.File, parse.Book) []parse.Quote
+	var parsingFunction parse.Parser
 	switch args[0] {
-	case "-kindle":
-		parsingFunction = parseKindleCSV
+	case parse.KindleType:
+		parsingFunction = parse.ParseKindle
+	case parse.PhysicalType:
+		parsingFunction = parse.ParsePhysical
 	default:
 		log.Fatalf("Unknown type: %s", args[0])
 	}
